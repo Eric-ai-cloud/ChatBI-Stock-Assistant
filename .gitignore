@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# 虚拟环境
+venv/
+env/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 生成的图表图片（运行时自动生成）
+image_show/
+test_charts/
+
+# 工作区临时文件
+workspace/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 环境变量
+.env.local
+
+# Nanobot 示例（非项目文件）
+CASE-nanobot使用/
+
+# Claude Code 配置
+.claude/

@@ -1,0 +1,17 @@
+# ChatBI 股票助手 - Python 依赖
+
+# 核心框架
+qwen-agent>=0.0.6
+dashscope>=1.17.0
+
+# 数据处理
+pandas>=2.0.0
+sqlalchemy>=2.0.0
+numpy>=1.24.0
+
+# 可视化
+matplotlib>=3.7.0
+
+# 数据获取（可选，仅 fetch_stock_history.py 需要）
+tushare>=1.4.0
+openpyxl>=3.1.0
