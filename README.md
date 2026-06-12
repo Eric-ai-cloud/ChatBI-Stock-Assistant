@@ -64,7 +64,7 @@ CREATE TABLE stock_history (
 
 ```bash
 # 克隆项目
-git clone <your-repo-url>
+git clone https://github.com/Eric-ai-cloud/ChatBI-Stock-Assistant.git
 cd CASE-ChatBI助手
 
 # 安装依赖
