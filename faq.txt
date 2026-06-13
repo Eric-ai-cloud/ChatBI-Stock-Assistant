@@ -1,0 +1,242 @@
+# ============================================
+# ChatBI 股票助手 FAQ 知识库（精简版）
+# ============================================
+
+## ⚠️⚠️⚠️ 最高优先级规则 ⚠️⚠️⚠️
+
+### 🚫 绝对禁止的SQL写法
+```sql
+-- ❌ 禁止：对字符串日期进行算术运算（这是最常见的错误！）
+WHERE trade_date >= MAX(trade_date) - 30
+WHERE trade_date >= (SELECT MAX(trade_date) - 30 FROM stock_history)
+WHERE trade_date >= trade_date - 7
+
+-- ❌ 禁止：硬编码具体日期（应该使用动态查询）
+WHERE trade_date >= '20230930' AND trade_date <= '20231031'
+```
+
+**为什么禁止？**
+- `trade_date` 是 VARCHAR 类型，格式为 'YYYYMMDD'
+- SQLite 会将字符串转换为数字后运算：'20260424' - 30 = 20260394（无效日期！）
+- 导致查询结果不完整或错误
+
+### ✅ 必须使用的正确写法
+
+**场景1：用户询问"最近一个月/一周/近期"等相对时间**
+```sql
+-- ✅ 正确：使用 ORDER BY + LIMIT
+SELECT * FROM (
+    SELECT trade_date, open_price, high_price, low_price, close_price 
+    FROM stock_history 
+    WHERE stock_code = '600519.SH' 
+    ORDER BY trade_date DESC 
+    LIMIT 30  -- 最近30个交易日
+) ORDER BY trade_date ASC  -- 外层升序，保证图表时间轴从左到右
+```
+
+**场景2：用户明确指定具体日期范围**
+```sql
+-- ✅ 正确：使用字符串比较
+WHERE trade_date >= '20240101' AND trade_date <= '20240131'
+```
+
+---
+
+## 📌 核心规范
+
+### 1. 日期格式与范围查询
+- `trade_date` 是字符串，格式 'YYYYMMDD'（如 '20240101'）
+- 查询条件：`WHERE trade_date >= '20240101' AND trade_date <= '20241231'`
+- **必须包含** `ORDER BY trade_date ASC`
+
+**✅ 推荐的写法：**
+```sql
+-- 方法1：查询最近N条记录（推荐用于"最近一个月/一周"等相对时间）
+SELECT * FROM (
+    SELECT trade_date, close_price 
+    FROM stock_history 
+    WHERE stock_code = '600519.SH' 
+    ORDER BY trade_date DESC 
+    LIMIT 30
+) ORDER BY trade_date ASC
+
+-- 方法2：使用具体日期范围（当用户明确指定日期时）
+WHERE trade_date >= '20240101' AND trade_date <= '20240131'
+```
+
+**重要提示：**
+- 当用户说"最近一个月"、"最近一周"等相对时间时，**不要假设具体日期**
+- 直接使用 `ORDER BY trade_date DESC LIMIT N` 获取最近的N条记录
+- **绝对不要**在SQL中对字符串日期进行减法运算
+
+### 2. 涨跌幅计算（最重要！）
+
+**公式：** 涨跌幅 = (期末收盘价 - 期初收盘价) / 期初收盘价 * 100%
+
+**获取方法：**
+- 期初收盘价：`(SELECT close_price FROM stock_history WHERE ... ORDER BY trade_date ASC LIMIT 1)`
+- 期末收盘价：`(SELECT close_price FROM stock_history WHERE ... ORDER BY trade_date DESC LIMIT 1)`
+
+**❌ 严禁使用的写法：**
+```sql
+-- 禁止1：数组索引（SQLite不支持）
+close_price[1], close_price[END]
+
+-- 禁止2：MAX/MIN（这是波动率）
+(MAX(close_price) - MIN(close_price)) / MIN(close_price)
+
+-- 禁止3：复杂窗口函数
+ROW_NUMBER(), RANK(), CASE WHEN 等获取首尾价格
+
+-- 禁止4：在SQL中直接计算而不展示原始数据
+```
+
+**✅ 正确做法：分步查询**
+```sql
+-- 步骤1：查询原始数据
+SELECT 
+    '贵州茅台' as stock_name,
+    (SELECT close_price FROM stock_history 
+     WHERE stock_code = '600519.SH' AND trade_date >= '20240101' AND trade_date <= '20241231' 
+     ORDER BY trade_date ASC LIMIT 1) as start_close,
+    (SELECT close_price FROM stock_history 
+     WHERE stock_code = '600519.SH' AND trade_date >= '20240101' AND trade_date <= '20241231' 
+     ORDER BY trade_date DESC LIMIT 1) as end_close
+
+-- 步骤2：手动计算并展示过程
+涨跌幅 = (end_close - start_close) / start_close * 100%
+```
+
+---
+
+## 🔍 常用查询示例
+
+### Q1: 查询股票走势
+```sql
+SELECT trade_date, close_price 
+FROM stock_history 
+WHERE stock_code = '600519.SH' 
+  AND trade_date >= '20240101' 
+ORDER BY trade_date ASC
+```
+
+### Q2: 对比多只股票
+**推荐：** 分别查询每只股票，用 UNION ALL 合并，避免复杂 JOIN
+
+### Q3: 统计查询
+```sql
+-- 平均收盘价
+SELECT AVG(close_price) FROM stock_history 
+WHERE stock_code = '600519.SH' AND trade_date >= '20240101'
+
+-- 成交量最大
+SELECT trade_date, volume FROM stock_history 
+WHERE stock_code = '600519.SH' 
+ORDER BY volume DESC LIMIT 10
+```
+
+### Q4: 查询最近N天的最高价和最低价
+
+**❌ 错误写法：**
+```sql
+-- 错误1：使用close_price而不是high_price/low_price
+-- 错误2：UNION ALL后按价格排序取前2条（会返回两个最高价）
+WITH recent_data AS (
+    SELECT * FROM stock_history 
+    WHERE stock_code = '600519.SH' 
+    ORDER BY trade_date DESC 
+    LIMIT 30
+)
+SELECT trade_date, high_price AS price, 'high' AS price_type 
+FROM recent_data 
+UNION ALL 
+SELECT trade_date, low_price AS price, 'low' AS price_type 
+FROM recent_data 
+ORDER BY price DESC, price_type ASC 
+LIMIT 2  -- ❌ 这会返回两个最高价！
+```
+
+**✅ 正确写法（方法1 - SQL子查询）：**
+```sql
+SELECT 
+    (SELECT trade_date FROM stock_history 
+     WHERE stock_code = '600519.SH' 
+       AND trade_date >= '20260325'
+     ORDER BY high_price DESC 
+     LIMIT 1) as high_price_date,
+    (SELECT MAX(high_price) FROM stock_history 
+     WHERE stock_code = '600519.SH' 
+       AND trade_date >= '20260325') as high_price,
+    (SELECT trade_date FROM stock_history 
+     WHERE stock_code = '600519.SH' 
+       AND trade_date >= '20260325'
+     ORDER BY low_price ASC 
+     LIMIT 1) as low_price_date,
+    (SELECT MIN(low_price) FROM stock_history 
+     WHERE stock_code = '600519.SH' 
+       AND trade_date >= '20260325') as low_price
+```
+
+**✅ 正确写法（方法2 - 应用层计算，强烈推荐）：**
+```sql
+-- 步骤1：查询完整数据
+SELECT trade_date, high_price, low_price, close_price
+FROM stock_history 
+WHERE stock_code = '600519.SH' 
+  AND trade_date >= '20260325'
+ORDER BY trade_date ASC
+
+-- 步骤2：在Python应用层计算极值
+max_high_idx = df['high_price'].idxmax()
+min_low_idx = df['low_price'].idxmin()
+
+high_price_row = df.loc[max_high_idx]
+low_price_row = df.loc[min_low_idx]
+
+print(f"最高价：{high_price_row['high_price']} 元，日期：{high_price_row['trade_date']}")
+print(f"最低价：{low_price_row['low_price']} 元，日期：{low_price_row['trade_date']}")
+```
+
+**关键点：**
+1. **区分字段**：最高价用 `high_price`，最低价用 `low_price`，不要用 `close_price`
+2. **先筛选范围**：先用具体日期范围筛选
+3. **再找极值**：在筛选后的数据中找 `MAX(high_price)` 和 `MIN(low_price)`
+4. **避免错误排序**：不要对所有数据统一排序后取前N条
+
+---
+
+## 📋 数据说明
+
+**支持股票：**
+- 贵州茅台 (600519.SH)
+- 五粮液 (000858.SZ)
+- 广发证券 (000776.SZ)
+- 中芯国际 (688981.SH)
+
+**时间范围：** 2020-01-02 至今（中芯国际从 2020-07-16 开始）
+
+**关键字段：**
+- stock_code, stock_name, trade_date (YYYYMMDD)
+- open_price, high_price, low_price, close_price
+- volume, amount
+
+---
+
+## ⚠️ 回答格式要求
+
+当用户询问涨跌幅时，**必须**按以下格式回答：
+
+### 📊 【原始数据】
+展示期初/期末日期和收盘价
+
+### 🧮 【计算过程】
+```
+涨跌幅 = (期末 - 期初) / 期初 * 100%
+      = (B - A) / A * 100%
+      = XX.XX%
+```
+
+### ✅ 【结论】
+给出最终对比结果
+
+**严禁直接给出结果而不展示计算过程！**

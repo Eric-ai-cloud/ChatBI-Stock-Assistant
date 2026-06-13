@@ -1,0 +1,8 @@
+﻿nanobot
+dashscope
+pandas
+sqlalchemy
+matplotlib
+numpy
+statsmodels
+gradio

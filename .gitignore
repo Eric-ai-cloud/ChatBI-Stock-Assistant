@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# 虚拟环境
+venv/
+.venv/
+env/
+.conda/
+
+# 运行时数据
+sessions/
+data/image_show/*
+!data/image_show/.gitkeep
+
+# 内存/缓存
+memory/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 临时文件
+test_image.html
+*.tmp
+*.bak
+
+# 日志
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Gradio
+gradio_cached_examples/
